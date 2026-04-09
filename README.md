@@ -2,7 +2,7 @@
 
 A simple command-line calculator with **intentional bugs**, designed as a demo and test target for the [ticket-automation-tool](https://github.com/papatel5698/ticket-automation-tool).
 
-This repo includes 20 pre-created GitHub Issues that map to real bugs, feature requests, and cleanup tasks in the code — making it a realistic playground for automated ticket triage.
+This repo includes 7 pre-created GitHub Issues that map to real bugs, feature requests, and cleanup tasks in the code — making it a realistic playground for automated ticket triage.
 
 ---
 
@@ -125,16 +125,14 @@ FAILED tests/test_calculator.py::test_negative_number       — "-5+3" raises Va
 
 ## GitHub Issues
 
-This repo has **20 GitHub Issues** that cover the bugs, feature requests, and cleanup tasks. They are categorized as:
+This repo has **7 GitHub Issues** that cover the bugs and feature requests. They are categorized as:
 
 | Category | Count | Examples |
 |----------|-------|---------|
 | Automatable bugs | 4 | Division by zero, empty input, integer division, whitespace |
-| Engineer-review bugs | 3 | Operator precedence, negative numbers, state bleed |
-| Needs-more-info bugs | 2 | Vague reports with missing reproduction steps |
-| Feature requests | 4 | Parentheses, history, math functions, variables |
-| Cleanup tasks | 4 | Refactoring, type hints, docstrings, error messages |
-| Questions | 2 | Decimal support, Python version compatibility |
+| Engineer-review bug | 1 | Operator precedence (complex parser rework) |
+| Engineer-review feature | 1 | Parentheses support (new parser functionality) |
+| Needs-more-info feature | 1 | History feature (vague request) |
 
 To recreate the issues (if starting from scratch):
 
@@ -156,7 +154,7 @@ calculator-demo/
 ├── tests/
 │   └── test_calculator.py  # Unit tests (4 intentionally failing)
 ├── scripts/
-│   └── create_issues.py    # Script to create 20 GitHub Issues
+│   └── create_issues.py    # Script to create 7 GitHub Issues
 ├── .gitignore
 ├── requirements.txt        # pytest
 └── README.md
