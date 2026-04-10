@@ -15,8 +15,19 @@ def test_multiply():
 
 
 def test_divide_integer():
-    # This will fail because of integer division bug (uses // instead of /)
     assert divide(7, 2) == 3.5
+
+
+def test_divide_decimal_result():
+    assert divide(10, 3) == pytest.approx(3.333333, rel=1e-4)
+
+
+def test_divide_exact():
+    assert divide(10, 2) == 5.0
+
+
+def test_evaluate_division():
+    assert evaluate("7/2") == 3.5
 
 
 def test_divide_by_zero():
