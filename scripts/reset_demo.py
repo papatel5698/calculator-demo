@@ -44,8 +44,16 @@ class ResetError(Exception):
     """The reset can't safely go ahead."""
 
 
-class IssueSetError(ValueError):
-    """demo/issues.json is malformed."""
+class IssueSetError(ResetError):
+    """demo/issues.json is missing or malformed."""
+
+
+class GitHubError(ResetError):
+    """A GitHub API call returned an error status."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
 
 
 # --- issue set ---------------------------------------------------------------
@@ -58,7 +66,10 @@ class IssueSet:
 
 
 def load_issue_set(path: Path) -> IssueSet:
-    data = json.loads(Path(path).read_text())
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise IssueSetError(f"Can't read issue set {path}: {error}") from None
     labels = data.get("labels", {})
     issues = data.get("issues", [])
     seen = set()
@@ -102,8 +113,14 @@ class GitHubClient:
                 "Content-Type": "application/json",
             },
         )
-        with urllib.request.urlopen(request) as response:
-            body = response.read()
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = response.read()
+        except urllib.error.HTTPError as error:
+            detail = error.read()[:200].decode(errors="replace") if error.fp else error.reason
+            raise GitHubError(error.code, f"GitHub {method} {path} failed: {error.code} {detail}") from None
+        except urllib.error.URLError as error:
+            raise ResetError(f"GitHub {method} {path} failed: {error.reason}") from None
         return json.loads(body) if body else None
 
     def list_open_issues(self) -> list[dict]:
@@ -119,18 +136,19 @@ class GitHubClient:
             page += 1
 
     def close_issue(self, number: int, comment: str) -> None:
-        self._request("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": comment})
+        # Close first: if the comment then fails, a rerun won't see the issue and comment twice.
         self._request(
             "PATCH",
             f"/repos/{self.repo}/issues/{number}",
             {"state": "closed", "state_reason": "not_planned"},
         )
+        self._request("POST", f"/repos/{self.repo}/issues/{number}/comments", {"body": comment})
 
     def ensure_label(self, name: str, color: str) -> None:
         try:
             self._request("POST", f"/repos/{self.repo}/labels", {"name": name, "color": color})
-        except urllib.error.HTTPError as error:
-            if error.code != 422:  # 422: label already exists
+        except GitHubError as error:
+            if error.status != 422:  # 422: label already exists
                 raise
 
     def create_issue(self, title: str, body: str, labels: list[str]) -> int:
@@ -141,22 +159,25 @@ class GitHubClient:
 
 
 def reset_issues(github, issue_set: IssueSet, dry_run: bool) -> list[str]:
-    """Close every open issue, then open the standard set in order."""
-    prefix = "[dry run] would " if dry_run else ""
+    """Open the standard set, then close every issue that was open before.
+
+    Opening first means a failure partway through leaves duplicates (fixed by
+    rerunning), never a repo with no open issues.
+    """
+    old_issues = github.list_open_issues()
+    if dry_run:
+        return [f"[dry run] would open: {i['title']}" for i in issue_set.issues] + [
+            f"[dry run] would close #{i['number']}: {i['title']}" for i in old_issues
+        ]
     lines = []
-    for issue in github.list_open_issues():
-        lines.append(f"{prefix}close #{issue['number']}: {issue['title']}")
-        if not dry_run:
-            github.close_issue(issue["number"], CLOSE_COMMENT)
     for name, color in issue_set.labels.items():
-        if not dry_run:
-            github.ensure_label(name, color)
+        github.ensure_label(name, color)
     for issue in issue_set.issues:
-        if dry_run:
-            lines.append(f"{prefix}open: {issue['title']}")
-        else:
-            number = github.create_issue(issue["title"], issue["body"], issue["labels"])
-            lines.append(f"opened #{number}: {issue['title']}")
+        number = github.create_issue(issue["title"], issue["body"], issue["labels"])
+        lines.append(f"opened #{number}: {issue['title']}")
+    for issue in old_issues:
+        github.close_issue(issue["number"], CLOSE_COMMENT)
+        lines.append(f"closed #{issue['number']}: {issue['title']}")
     return lines
 
 
@@ -179,7 +200,11 @@ def reset_code(repo_dir: Path, ref: str, paths: list[str], dry_run: bool) -> lis
     except ResetError:
         raise ResetError(f"Baseline ref {ref!r} not found. Fetch tags: git fetch --tags") from None
 
-    changes = _git(repo_dir, "diff", "--name-status", ref, "HEAD", "--", *paths).splitlines()
+    _check_safe_to_commit(repo_dir)
+
+    changes = _git(
+        repo_dir, "diff", "--no-renames", "--name-status", ref, "HEAD", "--", *paths
+    ).splitlines()
     if not changes:
         return [f"Code already matches {ref}."]
     lines = []
@@ -191,16 +216,23 @@ def reset_code(repo_dir: Path, ref: str, paths: list[str], dry_run: bool) -> lis
     if dry_run:
         return lines
 
+    _git(repo_dir, "rm", "-r", "-q", "--ignore-unmatch", "--", *paths)
+    _git(repo_dir, "checkout", ref, "--", *paths)
+    _git(repo_dir, "commit", "-q", "-m", f"Reset demo code to {ref}")
+    return lines
+
+
+def _check_safe_to_commit(repo_dir: Path) -> None:
+    """The reset commits on main, so main must be clean and up to date."""
     branch = _git(repo_dir, "rev-parse", "--abbrev-ref", "HEAD").strip()
     if branch != "main":
         raise ResetError(f"Run the code reset on main (currently on {branch!r}).")
     if _git(repo_dir, "status", "--porcelain"):
         raise ResetError("Working tree has uncommitted changes. Commit or stash them first.")
-
-    _git(repo_dir, "rm", "-r", "-q", "--ignore-unmatch", "--", *paths)
-    _git(repo_dir, "checkout", ref, "--", *paths)
-    _git(repo_dir, "commit", "-q", "-m", f"Reset demo code to {ref}")
-    return lines
+    if "origin" in _git(repo_dir, "remote").split():
+        _git(repo_dir, "fetch", "-q", "origin", "main")
+        if _git(repo_dir, "rev-parse", "HEAD") != _git(repo_dir, "rev-parse", "FETCH_HEAD"):
+            raise ResetError("Local main doesn't match origin/main. Run `git pull` first.")
 
 
 def push(repo_dir: Path) -> None:
@@ -221,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
     scope.add_argument("--code-only", action="store_true")
     scope.add_argument("--issues-only", action="store_true")
     args = parser.parse_args(argv)
+    if args.push and args.issues_only:
+        parser.error("--push only applies to the code reset; drop it or --issues-only")
 
     do_code, do_issues = not args.issues_only, not args.code_only
     token = os.environ.get("GITHUB_TOKEN")
@@ -229,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
+        # Validate everything before changing anything.
+        issue_set = load_issue_set(args.issue_set) if do_issues else None
         if do_code:
             lines = reset_code(REPO_ROOT, ref=args.ref, paths=BASELINE_PATHS, dry_run=args.dry_run)
             print("\n".join(lines))
@@ -236,10 +272,9 @@ def main(argv: list[str] | None = None) -> int:
                 push(REPO_ROOT)
                 print("Pushed main.")
         if do_issues:
-            issue_set = load_issue_set(args.issue_set)
             github = GitHubClient(args.repo, token)
             print("\n".join(reset_issues(github, issue_set, dry_run=args.dry_run)))
-    except (ResetError, IssueSetError) as error:
+    except ResetError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0

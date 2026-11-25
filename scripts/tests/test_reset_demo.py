@@ -59,6 +59,18 @@ def test_load_issue_set_rejects_missing_fields(tmp_path):
         load_issue_set(path)
 
 
+def test_load_issue_set_wraps_bad_json(tmp_path):
+    path = tmp_path / "issues.json"
+    path.write_text("{not json")
+    with pytest.raises(IssueSetError, match="issues.json"):
+        load_issue_set(path)
+
+
+def test_load_issue_set_wraps_missing_file(tmp_path):
+    with pytest.raises(IssueSetError, match="nope.json"):
+        load_issue_set(tmp_path / "nope.json")
+
+
 def test_load_issue_set_rejects_undeclared_labels(tmp_path):
     path = write_issue_set(tmp_path, {
         "labels": {"bug": "d73a4a"},
@@ -77,22 +89,28 @@ def test_repo_issue_set_is_valid():
 
 
 class FakeGitHub:
-    def __init__(self, open_issues):
+    def __init__(self, open_issues, fail_on_create=None):
         self.open_issues = list(open_issues)
         self.closed = []
         self.created = []
         self.labels = []
+        self.order = []
+        self.fail_on_create = fail_on_create
 
     def list_open_issues(self):
         return list(self.open_issues)
 
     def close_issue(self, number, comment):
+        self.order.append(("close", number))
         self.closed.append((number, comment))
 
     def ensure_label(self, name, color):
         self.labels.append((name, color))
 
     def create_issue(self, title, body, labels):
+        if title == self.fail_on_create:
+            raise ResetError("GitHub said no")
+        self.order.append(("create", title))
         number = 100 + len(self.created)
         self.created.append({"title": title, "body": body, "labels": labels})
         return number
@@ -113,6 +131,20 @@ def test_reset_issues_closes_every_open_issue_then_recreates_the_set():
     assert [i["title"] for i in github.created] == ["A", "B"]
     assert github.created[0] == {"title": "A", "body": "body of A", "labels": ["bug"]}
     assert github.labels == [("bug", "d73a4a")]
+
+
+def test_reset_issues_opens_new_issues_before_closing_old_ones():
+    # If GitHub fails halfway, the worst case is duplicates, never zero open issues.
+    github = FakeGitHub([{"number": 5, "title": "Old"}])
+    reset_issues(github, make_issue_set("A", "B"), dry_run=False)
+    assert github.order == [("create", "A"), ("create", "B"), ("close", 5)]
+
+
+def test_reset_issues_leaves_old_issues_open_if_creating_fails():
+    github = FakeGitHub([{"number": 5, "title": "Old"}], fail_on_create="B")
+    with pytest.raises(ResetError):
+        reset_issues(github, make_issue_set("A", "B"), dry_run=False)
+    assert github.closed == []
 
 
 def test_reset_issues_comments_when_closing():
@@ -165,11 +197,34 @@ def test_client_close_issue_comments_then_closes_as_not_planned():
                side_effect=[FakeResponse({}), FakeResponse({})]) as urlopen:
         GitHubClient("owner/repo", "tok").close_issue(7, "bye")
 
-    comment, close = [c.args[0] for c in urlopen.call_args_list]
+    # Close first: if the comment fails, a rerun won't see the issue and post a duplicate.
+    close, comment = [c.args[0] for c in urlopen.call_args_list]
     assert comment.full_url.endswith("/repos/owner/repo/issues/7/comments")
     assert json.loads(comment.data) == {"body": "bye"}
     assert close.get_method() == "PATCH"
     assert json.loads(close.data) == {"state": "closed", "state_reason": "not_planned"}
+
+
+def test_client_wraps_http_errors_with_status_and_body():
+    error = reset_demo.urllib.error.HTTPError(
+        "u", 403, "Forbidden", {}, io.BytesIO(b'{"message": "rate limited"}'))
+    with patch("scripts.reset_demo.urllib.request.urlopen", side_effect=error):
+        with pytest.raises(ResetError, match=r"403.*rate limited"):
+            GitHubClient("owner/repo", "tok").create_issue("T", "B", [])
+
+
+def test_client_wraps_network_errors():
+    error = reset_demo.urllib.error.URLError("no route to host")
+    with patch("scripts.reset_demo.urllib.request.urlopen", side_effect=error):
+        with pytest.raises(ResetError, match="no route to host"):
+            GitHubClient("owner/repo", "tok").list_open_issues()
+
+
+def test_client_sets_a_timeout():
+    with patch("scripts.reset_demo.urllib.request.urlopen",
+               return_value=FakeResponse({"number": 1})) as urlopen:
+        GitHubClient("owner/repo", "tok").create_issue("T", "B", [])
+    assert urlopen.call_args.kwargs.get("timeout")
 
 
 def test_client_create_issue_returns_number():
@@ -191,7 +246,7 @@ def test_client_ensure_label_ignores_already_exists():
 def test_client_ensure_label_raises_other_errors():
     error = reset_demo.urllib.error.HTTPError("u", 403, "forbidden", {}, None)
     with patch("scripts.reset_demo.urllib.request.urlopen", side_effect=error):
-        with pytest.raises(reset_demo.urllib.error.HTTPError):
+        with pytest.raises(ResetError, match="403"):
             GitHubClient("owner/repo", "tok").ensure_label("bug", "d73a4a")
 
 
@@ -214,6 +269,8 @@ def demo_repo(tmp_path):
     (repo / "src").mkdir()
     (repo / "tests").mkdir()
     (repo / "src" / "calc.py").write_text("result = a // b\n")
+    (repo / "src" / "gone.py").write_text("deleted by a fix\n")
+    (repo / "src" / "old_name.py").write_text("renamed by a fix\n" * 20)
     (repo / "tests" / "test_calc.py").write_text("# baseline tests\n")
     (repo / "README.md").write_text("readme v1\n")
     git(repo, "add", ".")
@@ -224,7 +281,9 @@ def demo_repo(tmp_path):
     (repo / "src" / "helper.py").write_text("added by a fix\n")
     (repo / "tests" / "test_calc.py").write_text("# tests for the fix\n")
     (repo / "README.md").write_text("readme v2\n")
-    git(repo, "add", ".")
+    (repo / "src" / "gone.py").unlink()
+    (repo / "src" / "old_name.py").rename(repo / "src" / "new_name.py")
+    git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "fix the bug")
     return repo
 
@@ -236,6 +295,9 @@ def test_reset_code_restores_baseline_paths_and_commits(demo_repo):
 
     assert (demo_repo / "src" / "calc.py").read_text() == "result = a // b\n"
     assert not (demo_repo / "src" / "helper.py").exists()
+    assert (demo_repo / "src" / "gone.py").exists()
+    assert (demo_repo / "src" / "old_name.py").exists()
+    assert not (demo_repo / "src" / "new_name.py").exists()
     assert (demo_repo / "tests" / "test_calc.py").read_text() == "# baseline tests\n"
     # Paths outside the baseline set are left alone.
     assert (demo_repo / "README.md").read_text() == "readme v2\n"
@@ -249,7 +311,7 @@ def test_reset_code_restores_baseline_paths_and_commits(demo_repo):
 
 def test_reset_code_does_nothing_when_already_at_baseline(demo_repo):
     git(demo_repo, "checkout", "-q", "demo-baseline", "--", "src", "tests")
-    git(demo_repo, "rm", "-q", "src/helper.py")
+    git(demo_repo, "rm", "-q", "src/helper.py", "src/new_name.py")
     git(demo_repo, "commit", "-q", "-m", "manual reset")
 
     lines = reset_code(demo_repo, ref="demo-baseline", paths=["src", "tests"], dry_run=False)
@@ -265,6 +327,16 @@ def test_reset_code_dry_run_lists_changes_without_touching_files(demo_repo):
     assert git(demo_repo, "status", "--porcelain") == ""
     assert "[dry run] would restore src/calc.py" in lines
     assert "[dry run] would remove src/helper.py" in lines
+    assert "[dry run] would restore src/gone.py" in lines
+    # Renames show as a remove plus a restore, not as "old -> new".
+    assert "[dry run] would restore src/old_name.py" in lines
+    assert "[dry run] would remove src/new_name.py" in lines
+
+
+def test_reset_code_dry_run_still_refuses_a_dirty_tree(demo_repo):
+    (demo_repo / "src" / "calc.py").write_text("uncommitted\n")
+    with pytest.raises(ResetError, match="uncommitted"):
+        reset_code(demo_repo, ref="demo-baseline", paths=["src", "tests"], dry_run=True)
 
 
 def test_reset_code_refuses_a_dirty_tree(demo_repo):
@@ -277,6 +349,21 @@ def test_reset_code_refuses_a_branch_other_than_main(demo_repo):
     git(demo_repo, "checkout", "-q", "-b", "feature")
     with pytest.raises(ResetError, match="main"):
         reset_code(demo_repo, ref="demo-baseline", paths=["src", "tests"], dry_run=False)
+
+
+def test_reset_code_refuses_when_main_is_behind_origin(demo_repo, tmp_path):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "clone", "-q", "--bare", str(demo_repo), str(remote))
+    git(demo_repo, "remote", "add", "origin", str(remote))
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", str(remote), str(other))
+    (other / "README.md").write_text("someone else pushed\n")
+    git(other, "commit", "-q", "-am", "newer")
+    git(other, "push", "-q", "origin", "main")
+
+    with pytest.raises(ResetError, match="origin/main"):
+        reset_code(demo_repo, ref="demo-baseline", paths=["src", "tests"], dry_run=False)
+    assert git(demo_repo, "log", "-1", "--format=%s").strip() == "fix the bug"
 
 
 def test_reset_code_reports_a_missing_baseline_ref(demo_repo):
@@ -324,6 +411,25 @@ def test_main_code_only_skips_issues_and_needs_no_token(monkeypatch):
 
     assert reset_demo.main(["--code-only"]) == 0
     assert calls == ["code"]
+
+
+def test_main_validates_the_issue_set_before_changing_anything(monkeypatch, tmp_path, capsys):
+    calls = []
+    bad = tmp_path / "issues.json"
+    bad.write_text("{not json")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(reset_demo, "reset_code", lambda *a, **k: calls.append("code") or [])
+    monkeypatch.setattr(reset_demo, "push", lambda repo_dir: calls.append("push"))
+
+    assert reset_demo.main(["--push", "--issue-set", str(bad)]) == 1
+    assert calls == []
+    assert "issues.json" in capsys.readouterr().err
+
+
+def test_main_rejects_push_with_issues_only(capsys):
+    with pytest.raises(SystemExit):
+        reset_demo.main(["--issues-only", "--push"])
+    assert "--push" in capsys.readouterr().err
 
 
 def test_main_reports_reset_errors(monkeypatch, capsys):

@@ -149,8 +149,12 @@ The standard issue set lives in [`demo/issues.json`](demo/issues.json). To get i
 Every demo changes this repo: fix PRs remove bugs, and issues get closed, labeled and commented on. The reset puts it back to the same starting point:
 
 - **Code:** `src/` and `tests/` are made to match the `demo-baseline` tag exactly, which restores the intentional bugs. The reset is a normal commit on top of `main`, so history is kept. Everything else (README, workflows, scripts) is left alone.
-- **Issues:** every open issue is closed as "not planned" with a comment, then a fresh copy of each issue in `demo/issues.json` is opened. Fresh copies carry no leftover triage labels or comments. Issue numbers change on every reset, so anything that needs to recognise a demo issue matches it by title (titles must be unique; the script checks).
+- **Issues:** a fresh copy of each issue in `demo/issues.json` is opened, then every issue that was open before is closed as "not planned" with a comment. Opening first means a failure partway through leaves duplicates rather than no issues; rerun the reset to clean up. Fresh copies carry no leftover triage labels or comments. Issue numbers change on every reset, so anything that needs to recognise a demo issue matches it by title (titles must be unique; the script checks).
 - **Pull requests are not touched.** Close leftover fix PRs by hand.
+- **Safety checks:** nothing changes until the issue set is validated, and the code reset refuses to run unless you're on a clean `main` that matches `origin/main`. Dry runs apply the same checks.
+- **Known limits:**
+  - Issues the Action opens are authored by `github-actions[bot]` with the built-in `GITHUB_TOKEN`, which never triggers other workflows. A workflow listening for `issues: opened` won't run for them. Use a personal access token or GitHub App token if it needs to.
+  - If `main` gets branch protection, the Action's direct push will be rejected unless the Actions bot is allowed to bypass it.
 
 **From GitHub:** Actions → **Reset demo** → **Run workflow**. Choose `all`, `code` or `issues`, and tick **dry run** to see the plan without changing anything.
 
