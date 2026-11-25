@@ -21,7 +21,7 @@ def multiply(a, b):
 
 def divide(a, b):
     global result
-    result = a / b
+    result = a // b
     return result
 
 
