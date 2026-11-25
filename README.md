@@ -112,16 +112,19 @@ This calculator has **7 intentional bugs** and **3 code smells**:
 pytest
 ```
 
-**Expected result (at the demo baseline): 7 passed, 4 xfailed**, plus the reset script's tests. The four tests that encode the intentional bugs are marked `@pytest.mark.xfail(strict=True)`:
+**Expected result (at the demo baseline): 5 xfailed, everything else passes.** The five tests that encode intentional bugs are marked `@pytest.mark.xfail(strict=True)`:
 
 ```
 XFAIL tests/test_calculator.py::test_divide_integer        — 7/2 returns 3 instead of 3.5
 XFAIL tests/test_calculator.py::test_operator_precedence   — 2+3*4 returns 20 instead of 14
 XFAIL tests/test_calculator.py::test_evaluate_with_spaces  — "2 + 3" raises ValueError
 XFAIL tests/test_calculator.py::test_negative_number       — "-5+3" raises ValueError
+XFAIL tests/test_calculator.py::test_evaluate_leaves_no_module_state — the global `result` is overwritten
 ```
 
 `strict=True` means an unexpected pass is a failure. A PR that fixes one of these bugs turns CI red (`XPASS(strict)`) until it removes that test's marker, so every fix has to say which bug it fixed. Each marker also names the exception the bug raises, so a test that fails for a different reason still fails CI.
+
+Two bugs work the other way round. `test_divide_by_zero` and `test_empty_input` pass at the baseline, because they check that the calculator functions raise an exception. A fix that handles those cases differently has to update those tests, as any fix that changes behaviour would.
 
 CI (`.github/workflows/ci.yml`) runs `pytest` on Python 3.11 and 3.12 for every PR and every push to `main`. The reset restores the markers along with the bugs.
 

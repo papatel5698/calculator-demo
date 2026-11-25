@@ -53,3 +53,11 @@ def test_empty_input():
 @pytest.mark.xfail(strict=True, raises=ValueError, reason="Intentional demo bug: the parser can't read a leading minus. A fix must remove this marker.")
 def test_negative_number():
     assert evaluate("-5+3") == -2
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Intentional demo bug: operations write to the module-level `result`. A fix must remove this marker.")
+def test_evaluate_leaves_no_module_state():
+    import src.calculator as calculator
+    calculator.result = 0
+    evaluate("2+3")
+    assert calculator.result == 0
