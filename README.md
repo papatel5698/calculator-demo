@@ -112,13 +112,19 @@ This calculator has **7 intentional bugs** and **3 code smells**:
 pytest tests/ -v
 ```
 
-**Expected result: 4 tests fail, 7 pass.** The failing tests demonstrate the intentional bugs:
+**Expected result (at the demo baseline): 4 tests fail, 7 pass.** The failing tests demonstrate the intentional bugs:
 
 ```
 FAILED tests/test_calculator.py::test_divide_integer       — 7/2 returns 3 instead of 3.5
 FAILED tests/test_calculator.py::test_operator_precedence   — 2+3*4 returns 20 instead of 14
 FAILED tests/test_calculator.py::test_evaluate_with_spaces  — "2 + 3" raises ValueError
 FAILED tests/test_calculator.py::test_negative_number       — "-5+3" raises ValueError
+```
+
+The reset script has its own tests, which all pass:
+
+```bash
+pytest scripts/tests -v
 ```
 
 ---
@@ -134,12 +140,44 @@ This repo has **7 GitHub Issues** that cover the bugs and feature requests. They
 | Engineer-review feature | 1 | Parentheses support (new parser functionality) |
 | Needs-more-info feature | 1 | History feature (vague request) |
 
-To recreate the issues (if starting from scratch):
+The standard issue set lives in [`demo/issues.json`](demo/issues.json). To get it back, reset the demo (below).
+
+---
+
+## Resetting the demo
+
+Every demo changes this repo: fix PRs remove bugs, and issues get closed, labeled and commented on. The reset puts it back to the same starting point:
+
+- **Code:** `src/` and `tests/` are made to match the `demo-baseline` tag exactly, which restores the intentional bugs. The reset is a normal commit on top of `main`, so history is kept. Everything else (README, workflows, scripts) is left alone.
+- **Issues:** a fresh copy of each issue in `demo/issues.json` is opened, then every issue that was open before is closed as "not planned" with a comment. Opening first means a failure partway through leaves duplicates rather than no issues; rerun the reset to clean up. Fresh copies carry no leftover triage labels or comments. Issue numbers change on every reset, so anything that needs to recognise a demo issue matches it by title (titles must be unique; the script checks).
+- **Pull requests are not touched.** Close leftover fix PRs by hand.
+- **Safety checks:** nothing changes until the issue set is validated, and the code reset refuses to run unless you're on a clean `main` that matches `origin/main`. Dry runs apply the same checks.
+- **Known limits:**
+  - Issues the Action opens are authored by `github-actions[bot]` with the built-in `GITHUB_TOKEN`, which never triggers other workflows. A workflow listening for `issues: opened` won't run for them. Use a personal access token or GitHub App token if it needs to.
+  - If `main` gets branch protection, the Action's direct push will be rejected unless the Actions bot is allowed to bypass it.
+
+**From GitHub:** Actions → **Reset demo** → **Run workflow**. Choose `all`, `code` or `issues`, and tick **dry run** to see the plan without changing anything.
+
+**From your machine** (on an up-to-date `main` with a clean working tree):
 
 ```bash
-export GITHUB_TOKEN=your_token_here
-python scripts/create_issues.py
+git fetch --tags
+export GITHUB_TOKEN=your_token_here   # needs issues: write; not needed for --code-only
+
+python scripts/reset_demo.py --dry-run   # show what would change
+python scripts/reset_demo.py --push      # reset code and issues, push main
+python scripts/reset_demo.py --code-only # just the code (then push yourself, or add --push)
+python scripts/reset_demo.py --issues-only
 ```
+
+**Changing the baseline.** When the demo itself should change (new bugs, new tests, xfail markers), commit the change, then move the tag to that commit:
+
+```bash
+git tag -f -a demo-baseline <commit> -m "Demo baseline"
+git push -f origin demo-baseline
+```
+
+**Changing the issue set.** Edit `demo/issues.json` (each issue has `title`, `body` and `labels`, and every label must be declared in `labels` with a colour), then run the issue reset.
 
 ---
 
@@ -153,8 +191,13 @@ calculator-demo/
 │   └── calculator.py       # Calculation logic (contains the intentional bugs)
 ├── tests/
 │   └── test_calculator.py  # Unit tests (4 intentionally failing)
+├── demo/
+│   └── issues.json         # The standard issue set the reset recreates
 ├── scripts/
-│   └── create_issues.py    # Script to create 7 GitHub Issues
+│   ├── reset_demo.py       # Resets code and issues to the demo starting state
+│   └── tests/              # Tests for the reset script (no network)
+├── .github/workflows/
+│   └── reset-demo.yml      # "Reset demo" Action (manual trigger)
 ├── .gitignore
 ├── requirements.txt        # pytest
 └── README.md
