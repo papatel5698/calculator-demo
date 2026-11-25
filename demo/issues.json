@@ -151,9 +151,7 @@
     {
       "title": "Use Python's eval() to fix the parsing bugs",
       "body": "The hand-written parser in `evaluate()` is behind most of the open bugs: precedence, spaces, negative numbers, parentheses. Python can already do all of this. Replacing the body of `evaluate()` with `return eval(expr)` is a one-line change that fixes them all at once, and the existing tests should pass.",
-      "labels": [
-        "enhancement"
-      ]
+      "labels": []
     },
     {
       "title": "Require Python 3.12",
