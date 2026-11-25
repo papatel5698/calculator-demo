@@ -2,7 +2,7 @@
 
 A simple command-line calculator with **intentional bugs**, designed as a demo and test target for the [ticket-automation-tool](https://github.com/papatel5698/ticket-automation-tool).
 
-This repo includes 7 pre-created GitHub Issues that map to real bugs, feature requests, and cleanup tasks in the code — making it a realistic playground for automated ticket triage.
+This repo includes a standard set of 23 GitHub Issues: bug reports, feature requests and cleanup tasks, written the way real users and developers write them. Some are clear, some are vague, some are duplicates, and not every report is accurate. That makes it a realistic playground for automated ticket triage.
 
 ---
 
@@ -134,14 +134,9 @@ CI (`.github/workflows/ci.yml`) runs `pytest` on Python 3.11 and 3.12 for every 
 
 ## GitHub Issues
 
-This repo has **7 GitHub Issues** that cover the bugs and feature requests. They are categorized as:
+This repo has **23 GitHub Issues**, the kind of backlog a small team builds up: precise bug reports with steps to reproduce, one-line complaints, duplicates filed by different people, feature requests, cleanup tasks from developers, and proposed changes that look simpler than they are.
 
-| Category | Count | Examples |
-|----------|-------|---------|
-| Automatable bugs | 4 | Division by zero, empty input, integer division, whitespace |
-| Engineer-review bug | 1 | Operator precedence (complex parser rework) |
-| Engineer-review feature | 1 | Parentheses support (new parser functionality) |
-| Needs-more-info feature | 1 | History feature (vague request) |
+The expected triage for each issue is deliberately **not** kept here. It lives in the tool's answer key (`evals/answer_key.json` in [ticket-automation-tool](https://github.com/papatel5698/ticket-automation-tool)), so a model reading this repo can't see the answers.
 
 The standard issue set lives in [`demo/issues.json`](demo/issues.json). To get it back, reset the demo (below).
 

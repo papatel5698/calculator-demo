@@ -1,7 +1,8 @@
 {
   "labels": {
     "bug": "d73a4a",
-    "enhancement": "a2eeef"
+    "enhancement": "a2eeef",
+    "cleanup": "fbca04"
   },
   "issues": [
     {
@@ -51,6 +52,114 @@
       "body": "It would be nice to have some kind of history feature. Maybe like pressing the up arrow or something?",
       "labels": [
         "enhancement"
+      ]
+    },
+    {
+      "title": "It crashed yesterday",
+      "body": "I was doing some sums yesterday and it just crashed on me. Lost what I was working on. Please fix this, it's really frustrating.",
+      "labels": []
+    },
+    {
+      "title": "Calculator gives wrong answer for large numbers",
+      "body": "When I put in really big numbers the answer comes out wrong. Smaller numbers seem fine.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Doesn't work on my machine",
+      "body": "I followed the README but nothing happens when I run it. I'm on Windows 11. Is this supposed to work on Windows?",
+      "labels": []
+    },
+    {
+      "title": "Dividing odd numbers gives the wrong answer",
+      "body": "If I divide an odd number by 2 the result is off. `7/2` shows `3` and `9/2` shows `4`. I'd expect `3.5` and `4.5`.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Can't use spaces when typing a calculation",
+      "body": "Typing `4 * 5` gives `Invalid input`. Typing `4*5` works. It took me a while to work out that the spaces were the problem.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Support brackets like (1+2)*3",
+      "body": "Would love to be able to group parts of a calculation with brackets, e.g. `(1+2)*3` = `9`.",
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "title": "Pressing Ctrl-D at the prompt prints a traceback",
+      "body": "Pressing Ctrl-D (end of input) at the `>` prompt dumps a Python traceback ending in `EOFError: EOF when reading a line` instead of exiting cleanly. Ctrl-C does the same with `KeyboardInterrupt`.\n\n**Expected:** print `Goodbye!` and exit, the same as typing `quit`.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Typing QUIT in capitals doesn't exit",
+      "body": "`quit` and `exit` work, but `QUIT` or `Exit` print `Invalid input` and keep the calculator running. The exit commands should be case-insensitive.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Negative numbers give Invalid input",
+      "body": "`-5+3` gives `Invalid input` instead of `-2`. Same for `3*-2`. There's no way to enter a negative number.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Decimal numbers aren't accepted",
+      "body": "`3.5+1` gives `Invalid input`. Only whole numbers seem to work. It'd be useful to calculate with prices and measurements.",
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "title": "Remove the global result variable from calculator.py",
+      "body": "`add()`, `subtract()`, `multiply()` and `divide()` all write their answer to a module-level `result` global before returning it. Nothing reads it. It makes the functions impure and harder to test. They should just return the value. `test_evaluate_leaves_no_module_state` covers it.",
+      "labels": [
+        "cleanup"
+      ]
+    },
+    {
+      "title": "Remove unused parse_expression()",
+      "body": "`parse_expression()` in `calculator.py` isn't called anywhere. `evaluate()` does its own tokenising. The only reference is an import in `tests/test_calculator.py`. Delete it along with the import.",
+      "labels": [
+        "cleanup"
+      ]
+    },
+    {
+      "title": "Add type hints and docstrings to calculator.py",
+      "body": "None of the functions in `calculator.py` or `main.py` have type hints or docstrings. Adding them would make the code easier to pick up. No behaviour changes.",
+      "labels": [
+        "cleanup"
+      ]
+    },
+    {
+      "title": "Add an exponent operator",
+      "body": "It would be handy to raise numbers to a power, e.g. `2^3` = `8` (or `2**3`, like Python).",
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "title": "Use Python's eval() to fix the parsing bugs",
+      "body": "The hand-written parser in `evaluate()` is behind most of the open bugs: precedence, spaces, negative numbers, parentheses. Python can already do all of this. Replacing the body of `evaluate()` with `return eval(expr)` is a one-line change that fixes them all at once, and the existing tests should pass.",
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "title": "Require Python 3.12",
+      "body": "`pyproject.toml` says `requires-python = \">=3.9\"`, but 3.9 is end-of-life. Bump it to `>=3.12` so we can use newer syntax. It's a one-line change.",
+      "labels": [
+        "cleanup"
       ]
     }
   ]
