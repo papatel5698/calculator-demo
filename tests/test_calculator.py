@@ -1,4 +1,5 @@
 import pytest
+
 from src.calculator import add, subtract, multiply, divide, evaluate, parse_expression
 
 
@@ -14,8 +15,8 @@ def test_multiply():
     assert multiply(3, 4) == 12
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Intentional demo bug: divide() uses // instead of /. A fix must remove this marker.")
 def test_divide_integer():
-    # This will fail because of integer division bug (uses // instead of /)
     assert divide(7, 2) == 3.5
 
 
@@ -33,13 +34,13 @@ def test_evaluate_simple_multiply():
     assert evaluate("3*4") == 12
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Intentional demo bug: evaluate() ignores operator precedence. A fix must remove this marker.")
 def test_operator_precedence():
-    # This will fail because calculator evaluates left-to-right
     assert evaluate("2+3*4") == 14
 
 
+@pytest.mark.xfail(strict=True, raises=ValueError, reason="Intentional demo bug: the parser rejects spaces. A fix must remove this marker.")
 def test_evaluate_with_spaces():
-    # This will fail because parser doesn't handle spaces
     assert evaluate("2 + 3") == 5
 
 
@@ -49,6 +50,14 @@ def test_empty_input():
         evaluate("")
 
 
+@pytest.mark.xfail(strict=True, raises=ValueError, reason="Intentional demo bug: the parser can't read a leading minus. A fix must remove this marker.")
 def test_negative_number():
-    # This will fail because parser can't handle leading minus
     assert evaluate("-5+3") == -2
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Intentional demo bug: operations write to the module-level `result`. A fix must remove this marker.")
+def test_evaluate_leaves_no_module_state():
+    import src.calculator as calculator
+    calculator.result = 0
+    evaluate("2+3")
+    assert calculator.result == 0

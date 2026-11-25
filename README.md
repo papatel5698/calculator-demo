@@ -109,23 +109,26 @@ This calculator has **7 intentional bugs** and **3 code smells**:
 ## Running Tests
 
 ```bash
-pytest tests/ -v
+pytest
 ```
 
-**Expected result (at the demo baseline): 4 tests fail, 7 pass.** The failing tests demonstrate the intentional bugs:
+**Expected result (at the demo baseline): 5 xfailed, everything else passes.** The five tests that encode intentional bugs are marked `@pytest.mark.xfail(strict=True)`:
 
 ```
-FAILED tests/test_calculator.py::test_divide_integer       — 7/2 returns 3 instead of 3.5
-FAILED tests/test_calculator.py::test_operator_precedence   — 2+3*4 returns 20 instead of 14
-FAILED tests/test_calculator.py::test_evaluate_with_spaces  — "2 + 3" raises ValueError
-FAILED tests/test_calculator.py::test_negative_number       — "-5+3" raises ValueError
+XFAIL tests/test_calculator.py::test_divide_integer        — 7/2 returns 3 instead of 3.5
+XFAIL tests/test_calculator.py::test_operator_precedence   — 2+3*4 returns 20 instead of 14
+XFAIL tests/test_calculator.py::test_evaluate_with_spaces  — "2 + 3" raises ValueError
+XFAIL tests/test_calculator.py::test_negative_number       — "-5+3" raises ValueError
+XFAIL tests/test_calculator.py::test_evaluate_leaves_no_module_state — the global `result` is overwritten
 ```
 
-The reset script has its own tests, which all pass:
+`strict=True` means an unexpected pass is a failure. A PR that fixes one of these bugs turns CI red (`XPASS(strict)`) until it removes that test's marker, so every fix has to say which bug it fixed. Each marker also names the exception the bug raises, so a test that fails for a different reason still fails CI.
 
-```bash
-pytest scripts/tests -v
-```
+Two bugs work the other way round. `test_divide_by_zero` and `test_empty_input` pass at the baseline, because they check that the calculator functions raise an exception. A fix that handles those cases differently has to update those tests, as any fix that changes behaviour would.
+
+CI (`.github/workflows/ci.yml`) runs `pytest` on Python 3.11 and 3.12 for every PR and every push to `main`. The reset restores the markers along with the bugs.
+
+`pytest` also runs the reset script's tests (`scripts/tests/`), which all pass.
 
 ---
 
@@ -190,13 +193,14 @@ calculator-demo/
 │   ├── main.py             # CLI entry point — REPL loop
 │   └── calculator.py       # Calculation logic (contains the intentional bugs)
 ├── tests/
-│   └── test_calculator.py  # Unit tests (4 intentionally failing)
+│   └── test_calculator.py  # Unit tests (4 marked xfail for the intentional bugs)
 ├── demo/
 │   └── issues.json         # The standard issue set the reset recreates
 ├── scripts/
 │   ├── reset_demo.py       # Resets code and issues to the demo starting state
 │   └── tests/              # Tests for the reset script (no network)
 ├── .github/workflows/
+│   ├── ci.yml              # Runs pytest on every PR and push to main
 │   └── reset-demo.yml      # "Reset demo" Action (manual trigger)
 ├── .gitignore
 ├── requirements.txt        # pytest
