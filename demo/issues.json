@@ -1,0 +1,57 @@
+{
+  "labels": {
+    "bug": "d73a4a",
+    "enhancement": "a2eeef"
+  },
+  "issues": [
+    {
+      "title": "Division by zero crashes the program",
+      "body": "When I enter `10/0`, the program crashes with an unhandled exception instead of showing an error message.\n\n**Steps to reproduce:**\n1. Run the calculator\n2. Type `10/0`\n3. Program crashes with ZeroDivisionError traceback\n\n**Expected behavior:** Show a user-friendly error message like \"Error: Division by zero\" and re-prompt.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Empty input crashes the program",
+      "body": "Pressing Enter without typing anything crashes the program with an IndexError.\n\n**Steps to reproduce:**\n1. Run the calculator\n2. Press Enter without typing anything\n3. Program crashes\n\n**Expected behavior:** Show an error message or re-prompt the user.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Division returns integer instead of decimal — 7/2 gives 3",
+      "body": "The division operation truncates decimal results. `7/2` returns `3` instead of `3.5`. `10/3` returns `3` instead of `3.333...`.\n\nIt seems to be using integer division (`//`) instead of true division (`/`).",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Whitespace in expressions causes parse error",
+      "body": "Entering `2 + 3` (with spaces around the operator) causes a parse error. Only `2+3` (no spaces) works.\n\nUsers naturally type spaces around operators, so this should be handled.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Operator precedence is wrong — 2+3*4 returns 20 instead of 14",
+      "body": "The calculator does not respect standard math operator precedence. Multiplication and division should be evaluated before addition and subtraction.\n\n**Example:**\n- `2+3*4` should return `14` but returns `20`\n- `10-2*3` should return `4` but returns `24`\n\nIt seems to evaluate strictly left to right. Fixing this requires reworking the expression parser to handle precedence correctly.",
+      "labels": [
+        "bug"
+      ]
+    },
+    {
+      "title": "Add support for parentheses in expressions",
+      "body": "The calculator should support parentheses to let users control evaluation order.\n\n**Examples:**\n- `(2+3)*4` should return `20`\n- `10/(2+3)` should return `2`\n\nThis would require updating the expression parser to handle nested groupings and recursive evaluation.",
+      "labels": [
+        "enhancement"
+      ]
+    },
+    {
+      "title": "Add history feature",
+      "body": "It would be nice to have some kind of history feature. Maybe like pressing the up arrow or something?",
+      "labels": [
+        "enhancement"
+      ]
+    }
+  ]
+}

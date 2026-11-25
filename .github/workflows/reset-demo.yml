@@ -1,0 +1,54 @@
+name: Reset demo
+
+# Restores the buggy code from the demo-baseline tag and recreates the standard
+# issue set, so every demo starts from the same state. Run it from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: What to reset
+        type: choice
+        options: [all, code, issues]
+        default: all
+      dry_run:
+        description: Only show what would change
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # commit the code reset to main
+  issues: write # close and recreate issues
+
+concurrency:
+  group: reset-demo
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0 # the code reset diffs against the demo-baseline tag
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
+          SCOPE: ${{ inputs.scope }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          args=(--push)
+          [ "$SCOPE" = "code" ] && args+=(--code-only)
+          [ "$SCOPE" = "issues" ] && args+=(--issues-only)
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          python scripts/reset_demo.py "${args[@]}"
